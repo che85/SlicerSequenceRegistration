@@ -42,200 +42,41 @@ class SequenceRegistrationWidget(ScriptedLoadableModuleWidget):
     self.logic = SequenceRegistrationLogic()
     self.logic.logCallback = self.addLog
 
-    #
-    # Parameters Area
-    #
-    parametersCollapsibleButton = ctk.ctkCollapsibleButton()
-    parametersCollapsibleButton.text = "Parameters"
-    self.layout.addWidget(parametersCollapsibleButton)
+    # Load widget from .ui file (created by Qt Designer).
+    # Additional widgets can be instantiated manually and added to self.layout.
+    uiWidget = slicer.util.loadUI(self.resourcePath('UI/SequenceRegistration.ui'))
+    self.layout.addWidget(uiWidget)
+    self.ui = slicer.util.childWidgetVariables(uiWidget)
 
-    # Layout within the dummy collapsible button
-    parametersFormLayout = qt.QFormLayout(parametersCollapsibleButton)
+    self.ui.inputSelector.setMRMLScene(slicer.mrmlScene)
+    self.ui.outputVolumesSelector.setMRMLScene(slicer.mrmlScene)
+    self.ui.outputTransformSelector.setMRMLScene(slicer.mrmlScene)
 
-    #
-    # input volume selector
-    #
-    self.inputSelector = slicer.qMRMLNodeComboBox()
-    self.inputSelector.nodeTypes = ["vtkMRMLSequenceNode"]
-    self.inputSelector.selectNodeUponCreation = True
-    self.inputSelector.addEnabled = False
-    self.inputSelector.removeEnabled = False
-    self.inputSelector.noneEnabled = False
-    self.inputSelector.showHidden = False
-    self.inputSelector.showChildNodeTypes = False
-    self.inputSelector.setMRMLScene( slicer.mrmlScene )
-    self.inputSelector.setToolTip("Pick input volume sequence. Each time point will be registered to the fixed frame.")
-    parametersFormLayout.addRow("Input volume sequence:", self.inputSelector)
-
-    #
-    # output volume selector
-    #
-    self.outputVolumesSelector = slicer.qMRMLNodeComboBox()
-    self.outputVolumesSelector.nodeTypes = ["vtkMRMLSequenceNode"]
-    self.outputVolumesSelector.baseName = "OutputVolumes"
-    self.outputVolumesSelector.selectNodeUponCreation = True
-    self.outputVolumesSelector.addEnabled = True
-    self.outputVolumesSelector.removeEnabled = True
-    self.outputVolumesSelector.renameEnabled = True
-    self.outputVolumesSelector.noneEnabled = True
-    self.outputVolumesSelector.showHidden = False
-    self.outputVolumesSelector.showChildNodeTypes = False
-    self.outputVolumesSelector.setMRMLScene(slicer.mrmlScene)
-    self.outputVolumesSelector.setToolTip("Select a node for storing computed motion-compensated volume sequence.")
-    parametersFormLayout.addRow("Output volume sequence:", self.outputVolumesSelector)
-
-    #
-    # output transform selector
-    #
-    self.outputTransformSelector = slicer.qMRMLNodeComboBox()
-    self.outputTransformSelector.nodeTypes = ["vtkMRMLSequenceNode"]
-    self.outputTransformSelector.baseName = "OutputTransforms"
-    self.outputTransformSelector.selectNodeUponCreation = True
-    self.outputTransformSelector.addEnabled = True
-    self.outputTransformSelector.removeEnabled = True
-    self.outputTransformSelector.renameEnabled = True
-    self.outputTransformSelector.noneEnabled = True
-    self.outputTransformSelector.showHidden = False
-    self.outputTransformSelector.showChildNodeTypes = False
-    self.outputTransformSelector.setMRMLScene(slicer.mrmlScene)
-    self.outputTransformSelector.setToolTip("Computed displacement field that transform nodes from moving volume space to fixed volume space. NOTE: You must set at least one output sequence (transform and/or volume).")
-    parametersFormLayout.addRow("Output transform sequence:", self.outputTransformSelector)
-
-    #
-    # Output transform mode
-    #
     import Elastix
-    self.registrationPresetSelector = qt.QComboBox()
-    self.registrationPresetSelector.setToolTip("Pick preset to register with.")
     for preset in self.logic.elastixLogic.getRegistrationPresets():
-      self.registrationPresetSelector.addItem("{0} ({1})".format(preset[Elastix.RegistrationPresets_Modality], preset[Elastix.RegistrationPresets_Content]))
-    self.registrationPresetSelector.addItem("*NEW*")
-    self.newPresetIndex = self.registrationPresetSelector.count - 1
-    parametersFormLayout.addRow("Preset:", self.registrationPresetSelector)
+      self.ui.registrationPresetSelector.addItem(
+        f"{preset[Elastix.RegistrationPresets_Modality]} ({preset[Elastix.RegistrationPresets_Content]})")
+    self.ui.registrationPresetSelector.addItem("*NEW*")
+    self.newPresetIndex = self.ui.registrationPresetSelector.count - 1
 
-    #
-    # Advanced Area
-    #
-    advancedCollapsibleButton = ctk.ctkCollapsibleButton()
-    advancedCollapsibleButton.text = "Advanced"
-    advancedCollapsibleButton.collapsed = 1
-    self.layout.addWidget(advancedCollapsibleButton)
-
-    # Layout within the dummy collapsible button
-    advancedFormLayout = qt.QFormLayout(advancedCollapsibleButton)
-
-    # Fixed frame index
-    self.sequenceFixedItemIndexWidget = ctk.ctkSliderWidget()
-    self.sequenceFixedItemIndexWidget.decimals = 0
-    self.sequenceFixedItemIndexWidget.singleStep = 1
-    self.sequenceFixedItemIndexWidget.minimum = 0
-    self.sequenceFixedItemIndexWidget.value = 0
-    self.sequenceFixedItemIndexWidget.setToolTip("Set the frame of the input sequence to use as the fixed volume (that all other volumes will be registered to.")
-    advancedFormLayout.addRow("Fixed frame index:", self.sequenceFixedItemIndexWidget)
-
-    # Sequence start index
-    self.sequenceStartItemIndexWidget = ctk.ctkSliderWidget()
-    self.sequenceStartItemIndexWidget.minimum = 0
-    self.sequenceStartItemIndexWidget.decimals = 0
-    self.sequenceStartItemIndexWidget.setToolTip("First item in the sequence to register.")
-    advancedFormLayout.addRow("Start frame index:", self.sequenceStartItemIndexWidget)
-
-    # Sequence end index
-    self.sequenceEndItemIndexWidget = ctk.ctkSliderWidget()
-    self.sequenceEndItemIndexWidget.minimum = 0
-    self.sequenceEndItemIndexWidget.decimals = 0
-    self.sequenceEndItemIndexWidget.setToolTip("Last item in the sequence to register.")
-    advancedFormLayout.addRow("End frame index:", self.sequenceEndItemIndexWidget)
-
-    #
-    # Transform direction
-    #
-    self.transformDirectionSelector = qt.QComboBox()
-    self.transformDirectionSelector.setToolTip("Moving to fixed: computes stabilizing transform. Fixed to moving: computes morphing transform, which deforms structures defined on the fixed frame to all moving frames.")
-    self.transformDirectionSelector.addItem("moving frames to fixed frame")
-    self.transformDirectionSelector.addItem("fixed frame to moving frames")
-    advancedFormLayout.addRow("Transform direction:", self.transformDirectionSelector)
-
-    #
-    # Option to show detailed log
-    #
-
-    self.showDetailedLogDuringExecutionCheckBox = qt.QCheckBox(" ")
-    self.showDetailedLogDuringExecutionCheckBox.checked = False
-    label = qt.QLabel("Show detailed log during registration:")
-    label.setToolTip("Show detailed log during registration.")
-    self.showDetailedLogDuringExecutionCheckBox.setToolTip("Show detailed log during registration.")
-    advancedFormLayout.addRow(label, self.showDetailedLogDuringExecutionCheckBox)
-
-    #
-    # Option to keep temporary files after registration
-    #
-
-    self.keepTemporaryFilesCheckBox = qt.QCheckBox(" ")
-    self.keepTemporaryFilesCheckBox.checked = False
-    label = qt.QLabel("Keep temporary files:")
-    label.setToolTip("Keep temporary files (inputs, computed outputs, logs) after the registration is completed.")
-    self.keepTemporaryFilesCheckBox.setToolTip("Keep temporary files (inputs, computed outputs, logs) after the registration is completed.")
-
-    #
-    # Button to open the folder in which temporary files are stored
-    #
-
-    self.showTemporaryFilesFolderButton = qt.QPushButton("Show temp folder")
-    self.showTemporaryFilesFolderButton.toolTip = "Open the folder where temporary files are stored."
-    self.showTemporaryFilesFolderButton.setSizePolicy(qt.QSizePolicy.MinimumExpanding, qt.QSizePolicy.Preferred)
-
-    hbox = qt.QHBoxLayout()
-    hbox.addWidget(self.keepTemporaryFilesCheckBox)
-    hbox.addWidget(self.showTemporaryFilesFolderButton)
-    advancedFormLayout.addRow(label, hbox)
-
-
-    self.showRegistrationParametersDatabaseFolderButton = qt.QPushButton("Show database folder")
-    self.showRegistrationParametersDatabaseFolderButton.toolTip = "Open the folder where temporary files are stored."
-    self.showRegistrationParametersDatabaseFolderButton.setSizePolicy(qt.QSizePolicy.MinimumExpanding, qt.QSizePolicy.Preferred)
-    advancedFormLayout.addRow("Registration presets:", self.showRegistrationParametersDatabaseFolderButton)
-
-    customElastixBinDir = self.logic.elastixLogic.getCustomElastixBinDir()
-    self.customElastixBinDirSelector = ctk.ctkPathLineEdit()
-    self.customElastixBinDirSelector.filters = ctk.ctkPathLineEdit.Dirs
-    self.customElastixBinDirSelector.setCurrentPath(customElastixBinDir)
-    self.customElastixBinDirSelector.setSizePolicy(qt.QSizePolicy.MinimumExpanding, qt.QSizePolicy.Preferred)
-    self.customElastixBinDirSelector.setToolTip("Set bin directory of an Elastix installation (where elastix executable is located). "
-      "If value is empty then default elastix (bundled with SlicerElastix extension) will be used.")
-    advancedFormLayout.addRow("Custom Elastix toolbox location:", self.customElastixBinDirSelector)
-
-    #
-    # Apply Button
-    #
-    self.applyButton = qt.QPushButton("Register")
-    self.applyButton.toolTip = "Start registration."
-    self.applyButton.enabled = False
-    self.layout.addWidget(self.applyButton)
-
-
-    self.statusLabel = qt.QPlainTextEdit()
-    self.statusLabel.setTextInteractionFlags(qt.Qt.TextSelectableByMouse)
-    self.statusLabel.setCenterOnScroll(True)
-    self.layout.addWidget(self.statusLabel)
+    self.ui.customElastixBinDirSelector.setCurrentPath(self.logic.elastixLogic.getCustomElastixBinDir())
 
     # connections
-    self.applyButton.connect('clicked(bool)', self.onApplyButton)
-    self.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onInputSelect)
-    self.outputVolumesSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
-    self.outputTransformSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
-    self.sequenceFixedItemIndexWidget.connect('valueChanged(double)', self.setSequenceItemIndex)
-    self.sequenceStartItemIndexWidget.connect('valueChanged(double)', self.setSequenceItemIndex)
-    self.sequenceEndItemIndexWidget.connect('valueChanged(double)', self.setSequenceItemIndex)
-    self.showTemporaryFilesFolderButton.connect('clicked(bool)', self.onShowTemporaryFilesFolder)
-    self.showRegistrationParametersDatabaseFolderButton.connect('clicked(bool)', self.onShowRegistrationParametersDatabaseFolder)
+    self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
+    self.ui.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onInputSelect)
+    self.ui.outputVolumesSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
+    self.ui.outputTransformSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.onSelect)
+    self.ui.sequenceFixedItemIndexWidget.connect('valueChanged(double)', self.setSequenceItemIndex)
+    self.ui.sequenceStartItemIndexWidget.connect('valueChanged(double)', self.setSequenceItemIndex)
+    self.ui.sequenceEndItemIndexWidget.connect('valueChanged(double)', self.setSequenceItemIndex)
+    self.ui.showTemporaryFilesFolderButton.connect('clicked(bool)', self.onShowTemporaryFilesFolder)
+    self.ui.showRegistrationParametersDatabaseFolderButton.connect('clicked(bool)', self.onShowRegistrationParametersDatabaseFolder)
     # Immediately update deleteTemporaryFiles and show detailed logs in the logic to make it possible to decide to
     # update these variables while the registration is running
-    self.keepTemporaryFilesCheckBox.connect("toggled(bool)", self.onKeepTemporaryFilesToggled)
-    self.showDetailedLogDuringExecutionCheckBox.connect("toggled(bool)", self.onShowLogToggled)
+    self.ui.keepTemporaryFilesCheckBox.connect("toggled(bool)", self.onKeepTemporaryFilesToggled)
+    self.ui.showDetailedLogDuringExecutionCheckBox.connect("toggled(bool)", self.onShowLogToggled)
     # Check if user selects to create a new preset
-    self.registrationPresetSelector.connect("activated(int)", self.onCreatePresetPressed)
-
+    self.ui.registrationPresetSelector.connect("activated(int)", self.onCreatePresetPressed)
 
     # Add vertical spacer
     self.layout.addStretch(1)
@@ -247,11 +88,11 @@ class SequenceRegistrationWidget(ScriptedLoadableModuleWidget):
     self.onInputSelect()
 
   def setSequenceItemIndex(self, index):
-    sequenceBrowserNode = self.logic.findBrowserForSequence(self.inputSelector.currentNode())
+    sequenceBrowserNode = self.logic.findBrowserForSequence(self.ui.inputSelector.currentNode())
     sequenceBrowserNode.SetSelectedItemNumber(int(index))
 
   def onCreatePresetPressed(self):
-    if self.registrationPresetSelector.currentIndex != self.newPresetIndex:
+    if self.ui.registrationPresetSelector.currentIndex != self.newPresetIndex:
       return
 
     self.newPresetBox = qt.QDialog()
@@ -350,8 +191,8 @@ class SequenceRegistrationWidget(ScriptedLoadableModuleWidget):
     self.logic = SequenceRegistrationLogic()
     allPresets = self.logic.elastixLogic.getRegistrationPresets()
     preset = allPresets[len(allPresets) - 1]
-    self.registrationPresetSelector.insertItem(self.newPresetIndex, "{0} ({1})".format(preset[Elastix.RegistrationPresets_Modality], preset[Elastix.RegistrationPresets_Content]))
-    self.registrationPresetSelector.currentIndex = self.newPresetIndex
+    self.ui.registrationPresetSelector.insertItem(self.newPresetIndex, "{0} ({1})".format(preset[Elastix.RegistrationPresets_Modality], preset[Elastix.RegistrationPresets_Content]))
+    self.ui.registrationPresetSelector.currentIndex = self.newPresetIndex
     self.newPresetIndex += 1
 
   def overwriteParFile(self, filename):
@@ -385,15 +226,15 @@ class SequenceRegistrationWidget(ScriptedLoadableModuleWidget):
         return self.newParameterButtons.index(row)
 
   def cleanup(self):
-  	pass
+    pass
 
   def onInputSelect(self):
-    if not self.inputSelector.currentNode():
+    if not self.ui.inputSelector.currentNode():
       numberOfDataNodes = 0
     else:
-      numberOfDataNodes = self.inputSelector.currentNode().GetNumberOfDataNodes()
+      numberOfDataNodes = self.ui.inputSelector.currentNode().GetNumberOfDataNodes()
 
-    for sequenceItemSelectorWidget in [self.sequenceFixedItemIndexWidget, self.sequenceStartItemIndexWidget, self.sequenceEndItemIndexWidget]:
+    for sequenceItemSelectorWidget in [self.ui.sequenceFixedItemIndexWidget, self.ui.sequenceStartItemIndexWidget, self.ui.sequenceEndItemIndexWidget]:
       if numberOfDataNodes < 1:
         sequenceItemSelectorWidget.maximum = 0
         sequenceItemSelectorWidget.enabled = False
@@ -401,18 +242,18 @@ class SequenceRegistrationWidget(ScriptedLoadableModuleWidget):
         sequenceItemSelectorWidget.maximum = numberOfDataNodes-1
         sequenceItemSelectorWidget.enabled = True
 
-    self.sequenceFixedItemIndexWidget.value =  int(self.sequenceStartItemIndexWidget.maximum / 2)
-    self.sequenceStartItemIndexWidget.value =  0
-    self.sequenceEndItemIndexWidget.value = self.sequenceEndItemIndexWidget.maximum
+    self.ui.sequenceFixedItemIndexWidget.value =  int(self.ui.sequenceStartItemIndexWidget.maximum / 2)
+    self.ui.sequenceStartItemIndexWidget.value =  0
+    self.ui.sequenceEndItemIndexWidget.value = self.ui.sequenceEndItemIndexWidget.maximum
 
     self.onSelect()
 
   def onSelect(self):
 
-    self.applyButton.enabled = self.inputSelector.currentNode() and (self.outputVolumesSelector.currentNode() or self.outputTransformSelector.currentNode())
+    self.ui.applyButton.enabled = self.ui.inputSelector.currentNode() and (self.ui.outputVolumesSelector.currentNode() or self.ui.outputTransformSelector.currentNode())
 
     if not self.registrationInProgress:
-      self.applyButton.text = "Register"
+      self.ui.applyButton.text = "Register"
       return
     self.updateBrowsers()
 
@@ -421,24 +262,24 @@ class SequenceRegistrationWidget(ScriptedLoadableModuleWidget):
     if self.registrationInProgress:
       self.registrationInProgress = False
       self.logic.setAbortRequested(True)
-      self.applyButton.text = "Cancelling..."
-      self.applyButton.enabled = False
+      self.ui.applyButton.text = "Cancelling..."
+      self.ui.applyButton.enabled = False
       return
 
     self.registrationInProgress = True
-    self.applyButton.text = "Cancel"
-    self.statusLabel.plainText = ''
+    self.ui.applyButton.text = "Cancel"
+    self.ui.statusLabel.plainText = ''
     slicer.app.setOverrideCursor(qt.Qt.WaitCursor)
     try:
-      computeMovingToFixedTransform = (self.transformDirectionSelector.currentIndex == 0)
-      fixedFrameIndex = int(self.sequenceFixedItemIndexWidget.value)
-      startFrameIndex = int(self.sequenceStartItemIndexWidget.value)
-      endFrameIndex = int(self.sequenceEndItemIndexWidget.value)
-      self.logic.elastixLogic.setCustomElastixBinDir(self.customElastixBinDirSelector.currentPath)
-      self.logic.logStandardOutput = self.showDetailedLogDuringExecutionCheckBox.checked
-      self.logic.registerVolumeSequence(self.inputSelector.currentNode(),
-        self.outputVolumesSelector.currentNode(), self.outputTransformSelector.currentNode(),
-        fixedFrameIndex, self.registrationPresetSelector.currentIndex, computeMovingToFixedTransform,
+      computeMovingToFixedTransform = (self.ui.transformDirectionSelector.currentIndex == 0)
+      fixedFrameIndex = int(self.ui.sequenceFixedItemIndexWidget.value)
+      startFrameIndex = int(self.ui.sequenceStartItemIndexWidget.value)
+      endFrameIndex = int(self.ui.sequenceEndItemIndexWidget.value)
+      self.logic.elastixLogic.setCustomElastixBinDir(self.ui.customElastixBinDirSelector.currentPath)
+      self.logic.logStandardOutput = self.ui.showDetailedLogDuringExecutionCheckBox.checked
+      self.logic.registerVolumeSequence(self.ui.inputSelector.currentNode(),
+        self.ui.outputVolumesSelector.currentNode(), self.ui.outputTransformSelector.currentNode(),
+        fixedFrameIndex, self.ui.registrationPresetSelector.currentIndex, computeMovingToFixedTransform,
         startFrameIndex, endFrameIndex)
     except Exception as e:
       print(e)
@@ -453,20 +294,21 @@ class SequenceRegistrationWidget(ScriptedLoadableModuleWidget):
   def addLog(self, text):
     """Append text to log window
     """
-    self.statusLabel.appendPlainText(text)
+    self.ui.statusLabel.appendPlainText(text)
     slicer.app.processEvents()  # force update
 
   def onShowTemporaryFilesFolder(self):
-    qt.QDesktopServices().openUrl(qt.QUrl("file:///" + self.logic.elastixLogic.getTempDirectoryBase(), qt.QUrl.TolerantMode));
+    qt.QDesktopServices().openUrl(qt.QUrl("file:///" + self.logic.elastixLogic.getTempDirectoryBase(), qt.QUrl.TolerantMode))
 
   def onKeepTemporaryFilesToggled(self, toggle):
-    self.logic.elastixLogic.deleteTemporaryFiles = toggle
+    self.logic.elastixLogic.deleteTemporaryFiles = not toggle
 
   def onShowRegistrationParametersDatabaseFolder(self):
-    qt.QDesktopServices().openUrl(qt.QUrl("file:///" + self.logic.elastixLogic.registrationParameterFilesDir, qt.QUrl.TolerantMode));
+    qt.QDesktopServices().openUrl(qt.QUrl("file:///" + self.logic.elastixLogic.registrationParameterFilesDir, qt.QUrl.TolerantMode))
 
   def onShowLogToggled(self, toggle):
     self.logic.elastixLogic.logStandardOutput = toggle
+
 
 #
 # SequenceRegistrationLogic
@@ -500,8 +342,8 @@ class SequenceRegistrationLogic(ScriptedLoadableModuleLogic):
         return browserNode
     return None
 
-  def registerVolumeSequence(self, inputVolSeq, outputVolSeq, outputTransformSeq, fixedVolumeItemNumber, presetIndex, computeMovingToFixedTransform = True,
-    startFrameIndex=None, endFrameIndex=None):
+  def registerVolumeSequence(self, inputVolSeq, outputVolSeq, outputTransformSeq, fixedVolumeItemNumber, presetIndex,
+                             computeMovingToFixedTransform=True, startFrameIndex=None, endFrameIndex=None):
     """
     computeMovingToFixedTransform: if True then moving->fixed else fixed->moving transforms are computed
     """
@@ -622,6 +464,7 @@ class SequenceRegistrationLogic(ScriptedLoadableModuleLogic):
         if outputTransformSeq and not self.findBrowserForSequence(outputTransformSeq):
           outputBrowserNode.AddSynchronizedSequenceNodeID(outputTransformSeq.GetID())
           outputBrowserNode.SetOverwriteProxyName(outputTransformSeq, True)
+
 
 class SequenceRegistrationTest(ScriptedLoadableModuleTest):
   """
